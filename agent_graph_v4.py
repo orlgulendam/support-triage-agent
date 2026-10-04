@@ -4,7 +4,8 @@ from anthropic import Anthropic
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-
+from logger import init_db, log_karar
+init_db()
 load_dotenv()
 client = Anthropic()
 
@@ -151,6 +152,21 @@ while app.get_state(config).next:
     yeni_karar = "onay" if karar.lower() == "e" else "red"
     app.update_state(config, {"insan_karari": yeni_karar})
     sonuc = app.invoke(None, config=config)
+if sonuc["insan_karari"] == "onay" or sonuc["kategori"] == "basit_soru":
+    sonuc_tipi = "otomatik_cevap" if sonuc["kategori"] == "basit_soru" else "insan_onayli"
+elif sonuc["insan_karari"] == "red":
+    sonuc_tipi = "eskale_edildi"
+else:
+    sonuc_tipi = "bilinmiyor"
 
+log_karar(
+    talep=sonuc["talep"],
+    kategori=sonuc["kategori"],
+    deneme_sayisi=sonuc["deneme_sayisi"],
+    insan_karari=sonuc["insan_karari"],
+    sonuc_tipi=sonuc_tipi,
+    cevap=sonuc["cevap"]
+)
+print("\n[Karar günlüğe kaydedildi]")
 print("\nGraph tamamlandi, son hal:")
 print(sonuc)
