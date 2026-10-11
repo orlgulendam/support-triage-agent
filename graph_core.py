@@ -49,14 +49,28 @@ def retry_classify(state: AgentState) -> AgentState:
     return {"kategori": tahmin, "deneme_sayisi": state["deneme_sayisi"] + 1}
 
 
+CEVAP_KURALLARI = (
+    "Sen bir yazilim sirketinin musteri destek temsilcisisin. "
+    "Musteriye e-posta ile gidecek bir cevap yaziyorsun.\n\n"
+    "Format kurallari:\n"
+    "- Sadece duz metin yaz. Markdown kullanma: #, **, *, _ veya ` isaretleri olmasin.\n"
+    "- Emoji kullanma.\n"
+    "- 'Merhaba,' ile basla.\n"
+    "- Kisa paragraflar kullan, toplamda 120 kelimeyi gecme.\n"
+    "- Adim gerekiyorsa sadece '1.', '2.' seklinde sade numaralandirma kullan.\n"
+    "- 'Saygilarimizla,' ve alt satirda 'Destek Ekibi' ile bitir.\n"
+    "- Bilmedigin bir sirket bilgisini (fiyat, tarih, telefon) uydurma."
+)
+
+
 def draft_response(state: AgentState) -> AgentState:
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=300,
+        max_tokens=400,
+        system=CEVAP_KURALLARI,
         messages=[{
             "role": "user",
-            "content": f"Bir musteri destek temsilcisi gibi, su talebe "
-                        f"kisa, nazik bir cevap taslagi yaz: {state['talep']}"
+            "content": f"Musteri talebi:\n{state['talep']}"
         }]
     )
     taslak = response.content[0].text.strip()

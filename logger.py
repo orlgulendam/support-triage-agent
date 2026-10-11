@@ -40,3 +40,30 @@ def log_karar(talep, kategori, deneme_sayisi, insan_karari, sonuc_tipi, cevap):
     ))
     conn.commit()
     conn.close()
+
+
+def get_kararlar():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT id, zaman, talep, kategori, sonuc_tipi, cevap
+        FROM kararlar
+        ORDER BY id DESC
+    """).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_istatistik():
+    conn = sqlite3.connect(DB_PATH)
+    toplam = conn.execute("SELECT COUNT(*) FROM kararlar").fetchone()[0]
+    rows = conn.execute("""
+        SELECT sonuc_tipi, COUNT(*)
+        FROM kararlar
+        GROUP BY sonuc_tipi
+    """).fetchall()
+    conn.close()
+    return {
+        "toplam": toplam,
+        "dagilim": [{"tip": tip, "adet": adet} for tip, adet in rows],
+    }

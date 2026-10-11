@@ -1,11 +1,34 @@
+import os
 import uuid
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from graph_core import graph_app
-from logger import init_db, log_karar
+from logger import init_db, log_karar, get_kararlar, get_istatistik
 
 init_db()
 app = FastAPI()
+
+# Hangi adreslerden gelen tarayici isteklerine izin verilecegi.
+# Canliya alirken FRONTEND_URL ortam degiskenine sitenin adresini yazacagiz.
+izinli_adresler = os.getenv("FRONTEND_URL", "http://localhost:5173").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=izinli_adresler,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/tickets")
+def talepleri_listele():
+    return get_kararlar()
+
+
+@app.get("/stats")
+def istatistikleri_getir():
+    return get_istatistik()
 
 
 class YeniTalep(BaseModel):
