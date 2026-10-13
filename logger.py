@@ -19,8 +19,42 @@ def init_db():
             cevap TEXT
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bekleyenler (
+            ticket_id TEXT PRIMARY KEY,
+            talep TEXT,
+            kategori TEXT
+        )
+    """)
     conn.commit()
     conn.close()
+
+
+def bekleyen_kaydet(ticket_id, talep, kategori):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        "INSERT OR REPLACE INTO bekleyenler (ticket_id, talep, kategori) VALUES (?, ?, ?)",
+        (ticket_id, talep, kategori),
+    )
+    conn.commit()
+    conn.close()
+
+
+def bekleyen_sil(ticket_id):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM bekleyenler WHERE ticket_id = ?", (ticket_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_bekleyenler():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT ticket_id, talep, kategori FROM bekleyenler"
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 def log_karar(talep, kategori, deneme_sayisi, insan_karari, sonuc_tipi, cevap):

@@ -3,7 +3,8 @@ from dotenv import load_dotenv
 from anthropic import Anthropic
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+import sqlite3
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 load_dotenv()
 client = Anthropic()
@@ -143,5 +144,5 @@ graph.add_edge("retry_classify", "awaiting_review")
 graph.add_edge("draft_response", END)
 graph.add_edge("finalize_human", END)
 
-checkpointer = MemorySaver()
+checkpointer = SqliteSaver(sqlite3.connect("checkpoints.db", check_same_thread=False))
 graph_app = graph.compile(checkpointer=checkpointer, interrupt_before=["awaiting_review"])

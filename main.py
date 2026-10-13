@@ -1,10 +1,14 @@
 import os
+import secrets
 import uuid
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from graph_core import graph_app
-from logger import init_db, log_karar, get_kararlar, get_istatistik
+from logger import (
+    init_db, log_karar, get_kararlar, get_istatistik,
+    bekleyen_kaydet, bekleyen_sil, get_bekleyenler,
+)
 
 init_db()
 app = FastAPI()
@@ -21,14 +25,33 @@ app.add_middleware(
 )
 
 
-@app.get("/tickets")
+def temsilci_dogrula(x_panel_token: str = Header(default="")):
+    """Temsilci panelinin kullandigi uclari PANEL_TOKEN ile korur."""
+    beklenen = os.getenv("PANEL_TOKEN", "")
+    if not beklenen:
+        raise HTTPException(503, "PANEL_TOKEN ayarlanmamis")
+    if not secrets.compare_digest(x_panel_token, beklenen):
+        raise HTTPException(401, "Yetkisiz")
+
+
+@app.get("/tickets", dependencies=[Depends(temsilci_dogrula)])
 def talepleri_listele():
     return get_kararlar()
 
 
-@app.get("/stats")
+@app.get("/tickets/pending", dependencies=[Depends(temsilci_dogrula)])
+def bekleyenleri_listele():
+    return get_bekleyenler()
+
+
+@app.get("/stats", dependencies=[Depends(temsilci_dogrula)])
 def istatistikleri_getir():
     return get_istatistik()
+
+
+@app.get("/panel/auth", dependencies=[Depends(temsilci_dogrula)])
+def panel_giris_kontrol():
+    return {"ok": True}
 
 
 class YeniTalep(BaseModel):
@@ -37,6 +60,17 @@ class YeniTalep(BaseModel):
 
 class InsanKarari(BaseModel):
     karar: str  # "onay" veya "red"
+
+
+def _sonuc_dondur(ticket_id, config, sonuc):
+    durum = graph_app.get_state(config)
+    if durum.next:
+        bekleyen_kaydet(ticket_id, sonuc["talep"], sonuc["kategori"])
+        return {"ticket_id": ticket_id, "durum": "beklemede", "kategori": sonuc["kategori"]}
+    bekleyen_sil(ticket_id)
+    _kaydet(sonuc)
+    return {"ticket_id": ticket_id, "durum": "tamamlandi",
+            "kategori": sonuc["kategori"], "cevap": sonuc["cevap"]}
 
 
 @app.post("/tickets")
@@ -49,30 +83,19 @@ def yeni_talep_olustur(istek: YeniTalep):
          "deneme_sayisi": 0, "insan_karari": ""},
         config=config
     )
-
-    durum = graph_app.get_state(config)
-    if durum.next:
-        return {"ticket_id": ticket_id, "durum": "beklemede", "kategori": sonuc["kategori"]}
-    else:
-        _kaydet(sonuc)
-        return {"ticket_id": ticket_id, "durum": "tamamlandi",
-                "kategori": sonuc["kategori"], "cevap": sonuc["cevap"]}
+    return _sonuc_dondur(ticket_id, config, sonuc)
 
 
-@app.post("/tickets/{ticket_id}/review")
+@app.post("/tickets/{ticket_id}/review", dependencies=[Depends(temsilci_dogrula)])
 def insan_karari_bildir(ticket_id: str, istek: InsanKarari):
     config = {"configurable": {"thread_id": ticket_id}}
 
+    if not graph_app.get_state(config).next:
+        raise HTTPException(404, "Onay bekleyen talep bulunamadi")
+
     graph_app.update_state(config, {"insan_karari": istek.karar})
     sonuc = graph_app.invoke(None, config=config)
-
-    durum = graph_app.get_state(config)
-    if durum.next:
-        return {"ticket_id": ticket_id, "durum": "beklemede", "kategori": sonuc["kategori"]}
-    else:
-        _kaydet(sonuc)
-        return {"ticket_id": ticket_id, "durum": "tamamlandi",
-                "kategori": sonuc["kategori"], "cevap": sonuc["cevap"]}
+    return _sonuc_dondur(ticket_id, config, sonuc)
 
 
 def _kaydet(sonuc):

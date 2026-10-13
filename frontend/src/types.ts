@@ -23,3 +23,8 @@ export interface Stats {
   toplam: number;
   dagilim: StatDagilim[];
 }
+export interface PendingTicket {
+  ticket_id: string;
+  talep: string;
+  kategori: string;
+}
